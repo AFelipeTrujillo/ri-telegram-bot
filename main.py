@@ -8,7 +8,11 @@ from pymongo.server_api import ServerApi
 
 from telegram.ext import ApplicationBuilder, MessageHandler, filters
 
+#Use Cases
 from src.Application.UseCase.RegisterUserActivity import RegisterUserActivity
+from src.Application.UseCase.ProcessSpamCheck import ProcessSpamCheck
+from src.Application.UseCase.HandleUserMessage import HandleUserMessage
+
 from src.Infrastructure.Config.Settings import settings
 from src.Infrastructure.Persistence.MongoUserRepository import MongoUserRepository
 from src.Infrastructure.Delivery.Http.TelegramController import TelegramController
@@ -21,9 +25,13 @@ def main():
     db = client[settings.MONGO_DB_NAME]
     user_repo = MongoUserRepository(db)
 
-    register_use_case = RegisterUserActivity(user_repository=user_repo)
-
-    controller = TelegramController(register_user_case=register_use_case)
+    # register_use_case = RegisterUserActivity(user_repository=user_repo)
+    # spam_check_case = ProcessSpamCheck(user_repository = user_repo)
+    handle_message_use_case = HandleUserMessage(user_repository = user_repo)
+    
+    controller = TelegramController(
+        handle_message_use_case = handle_message_use_case
+    )
 
     token = settings.TELEGRAM_TOKEN
     app = ApplicationBuilder().token(token = token).build()

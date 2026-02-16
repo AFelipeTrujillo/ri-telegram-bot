@@ -19,7 +19,8 @@ class MongoUserRepository(UserRepository):
             username = data["username"],
             first_name = data["first_name"],
             message_count = data["message_count"],
-            last_seen = data["last_seen"]
+            last_seen = data["last_seen"],
+            warnings = data["warnings"]
         )
 
     def save(self, user: User) -> None:
@@ -29,7 +30,8 @@ class MongoUserRepository(UserRepository):
                 "username" : user.username,
                 "first_name" : user.first_name,
                 "message_count" : user.message_count,
-                "last_seen" : user.last_seen
+                "last_seen" : user.last_seen,
+                "warnings" : user.warnings
             }},
             upsert = True
         )
