@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 
 from src.Application.UseCase.RegisterUserActivity import RegisterUserActivity
@@ -15,7 +15,9 @@ class TelegramController:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         tg_user = update.effective_user
-        if not tg_user:
+        chat = update.effective_chat
+
+        if not tg_user or tg_user.is_bot or chat.type == "private":
             return
         
         result = self.use_case.execute(
@@ -28,8 +30,24 @@ class TelegramController:
             await update.message.reply_text(f"⚠️ {tg_user.first_name}, don't spam!")
 
         elif result == "mute":
-            await update.message.delete()
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"🔇 User {tg_user.first_name} has been restricted for spamming."
-            )
+            try:
+                await update.message.delete()
+                
+                # Restrict the user
+                await context.bot.restrict_chat_member(
+                    chat_id = chat.id,
+                    user_id = tg_user.id,
+                    permissions = ChatPermissions(
+                        can_send_messages = False,
+                        can_send_photos = False,
+                        can_send_videos = False
+                    )
+                )
+
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text=f"🔇 User {tg_user.first_name} has been restricted for spamming."
+                )
+
+            except Exception as e:
+                print(f"Execption TelegramController: {e}")
