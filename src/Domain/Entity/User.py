@@ -11,7 +11,7 @@ class User:
     username: Optional[str] = None
     message_count: int = 0
     warnings: int = 0
-    is_mute: bool = False
+    is_muted: bool = False
     last_seen: datetime = field(default_factory=datetime.now)
 
     def is_spamming(self, threshold_seconds: int) -> bool:

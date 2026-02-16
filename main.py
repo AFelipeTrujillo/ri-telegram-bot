@@ -7,11 +7,13 @@ from pymongo import MongoClient
 from pymongo.server_api import ServerApi
 
 from telegram.ext import ApplicationBuilder, MessageHandler, filters
+from telegram.ext import CommandHandler
 
 #Use Cases
 from src.Application.UseCase.RegisterUserActivity import RegisterUserActivity
 from src.Application.UseCase.ProcessSpamCheck import ProcessSpamCheck
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
+from src.Application.UseCase.UnmuteUser import UnmuteUser
 
 from src.Infrastructure.Config.Settings import settings
 from src.Infrastructure.Persistence.MongoUserRepository import MongoUserRepository
@@ -28,13 +30,16 @@ def main():
     # register_use_case = RegisterUserActivity(user_repository=user_repo)
     # spam_check_case = ProcessSpamCheck(user_repository = user_repo)
     handle_message_use_case = HandleUserMessage(user_repository = user_repo)
-    
+    handle_unmute_use_case = UnmuteUser(user_repository=user_repo)
+
     controller = TelegramController(
-        handle_message_use_case = handle_message_use_case
+        handle_message_use_case = handle_message_use_case,
+        handle_unmute_use_case = handle_unmute_use_case
     )
 
     token = settings.TELEGRAM_TOKEN
     app = ApplicationBuilder().token(token = token).build()
+    app.add_handler(CommandHandler("unmute", controller.handle_unmute))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), controller.handle_message))
 
     print("Bot is running...")
