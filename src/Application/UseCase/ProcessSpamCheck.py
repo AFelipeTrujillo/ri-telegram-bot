@@ -17,7 +17,7 @@ class ProcessSpamCheck:
             return "ok"
         
         if user.is_spamming(settings.SPAM_THRESHOLD_SECONDS):
-            user.add_warning()
+            user.record_spam_activity()
             user.record_activity()
             self.user_repository.save(user)
         

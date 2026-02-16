@@ -10,15 +10,13 @@ class User:
 
     username: Optional[str] = None
     message_count: int = 0
-    last_seen: datetime = field(default_factory=datetime.now)
     warnings: int = 0
+    is_mute: bool = False
+    last_seen: datetime = field(default_factory=datetime.now)
 
     def is_spamming(self, threshold_seconds: int) -> bool:
         time_delta = (datetime.now() - self.last_seen).total_seconds()
         return time_delta < threshold_seconds
-    
-    def add_warning(self):
-        self.warnings += 1
 
     def reset_warnings(self):
         self.warnings = 0
@@ -27,6 +25,19 @@ class User:
     def record_activity(self):
         self.message_count += 1
         self.last_seen = datetime.now()
+    
+    def record_spam_activity(self):
+        self.warnings += 1
+        
+        if self.warnings >= 3:
+            self.is_muted = True
+        
+        self.last_seen = datetime.now()
+    
+    def unmute(self):
+        self.is_muted = False
+        self.warnings = 0
+
     
     @property
     def display_name(self) -> str:

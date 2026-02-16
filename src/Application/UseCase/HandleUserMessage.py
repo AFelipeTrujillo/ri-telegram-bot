@@ -28,7 +28,7 @@ class HandleUserMessage:
         user.username = username
         
         if is_spam:
-            user.add_warning()
+            user.record_spam_activity()
             user.record_activity()
 
             self.user_repository.save(user)
