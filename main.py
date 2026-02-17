@@ -13,6 +13,7 @@ from telegram.ext import CommandHandler
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
 from src.Application.UseCase.HandlePing import HandlePing
+from src.Application.UseCase.FilterLink import FilterLink
 
 from src.Infrastructure.Config.Settings import settings
 from src.Infrastructure.Persistence.MongoUserRepository import MongoUserRepository
@@ -31,11 +32,14 @@ def main():
     handle_message_use_case = HandleUserMessage(user_repository = user_repo)
     handle_unmute_use_case = UnmuteUser(user_repository=user_repo)
     handle_ping_use_case = HandlePing()
+    handle_filter_link_use_case = FilterLink(user_repository = user_repo)
+
 
     controller = TelegramController(
         handle_message_use_case = handle_message_use_case,
         handle_unmute_use_case = handle_unmute_use_case,
-        handle_ping_use_case = handle_ping_use_case
+        handle_ping_use_case = handle_ping_use_case,
+        handle_filter_link_use_case = handle_filter_link_use_case
     )
 
     token = settings.TELEGRAM_TOKEN

@@ -2,11 +2,10 @@ from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 
 # Use Cases
-from src.Application.UseCase.RegisterUserActivity import RegisterUserActivity
-from src.Application.UseCase.ProcessSpamCheck import ProcessSpamCheck
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
 from src.Application.UseCase.HandlePing import HandlePing
+from src.Application.UseCase.FilterLink import FilterLink
 
 # Infra
 from src.Infrastructure.Config.Settings import settings
@@ -17,11 +16,13 @@ class TelegramController:
             self, 
             handle_message_use_case: HandleUserMessage,
             handle_unmute_use_case: UnmuteUser,
-            handle_ping_use_case: HandlePing
+            handle_ping_use_case: HandlePing,
+            handle_filter_link_use_case: FilterLink
         ):
         self.handle_message_case = handle_message_use_case
         self.handle_unmute_use_case = handle_unmute_use_case
         self.handle_ping_use_case = handle_ping_use_case
+        self.handle_filter_link_use_case = handle_filter_link_use_case
     
     async def handle_ping(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -67,35 +68,101 @@ class TelegramController:
 
         if not tg_user or tg_user.is_bot or chat.type == "private":
             return
+
+        if await self._handle_link_filtering(update, context):
+            return
         
+        await self._handle_spam_detection(update, context)
+
+    async def _handle_spam_detection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        tg_user = update.effective_user
+    
         result = self.handle_message_case.execute(
-            user_id = tg_user.id,
-            username = tg_user.username,
-            first_name = tg_user.first_name
+            user_id=tg_user.id,
+            username=tg_user.username,
+            first_name=tg_user.first_name
         )
 
         if result == "warn":
             await update.message.reply_text(f"⚠️ {tg_user.first_name}, don't spam!")
-
         elif result == "mute":
-            try:
-                await update.message.delete()
-                
-                # Restrict the user
-                await context.bot.restrict_chat_member(
-                    chat_id = chat.id,
-                    user_id = tg_user.id,
-                    permissions = ChatPermissions(
-                        can_send_messages = False,
-                        can_send_photos = False,
-                        can_send_videos = False
-                    )
-                )
+            await self._mute_user(update.effective_chat.id, tg_user, context, reason="Spamming")
+    
+    async def _handle_link_filtering(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
 
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=f"🔇 User {tg_user.first_name} has been restricted for spamming."
-                )
+        tg_user = update.effective_user
+        chat = update.effective_chat
 
-            except Exception as e:
-                print(f"Execption TelegramController: {e}")
+        has_links = any(e.type in ['url', 'text_link'] for e in update.message.entities) if update.message.entities else False
+        if not has_links:
+            return False
+
+        member = await chat.get_member(tg_user.id)
+        is_admin = member.status in ['administrator', 'creator']
+
+        decision = self.handle_filter_link_use_case.execute(
+            user_id=tg_user.id,
+            first_name=tg_user.first_name,
+            has_entities=True,
+            is_admin=is_admin
+        )
+
+        if "delete" in decision:
+            content = update.message.text or "[Media/Other]"
+            await update.message.delete()
+            await self._send_owner_report(tg_user, chat, content, context)
+            
+            if decision == "mute_and_delete":
+                await self._mute_user(chat.id, tg_user, context, reason="Link violation limit")
+            
+            return True
+
+        return False
+    
+    async def _send_owner_report(self, user, chat, content, context):
+
+        username = f"@{user.username}" if user.username else "No username"
+        
+        report = (
+            "🛡 LINK DELETED\n"
+            f"User ID: {user.id}\n"
+            f"User: {user.first_name} ({username})\n"
+            f"Group: {chat.title}\n"
+            f"Content: {content}"
+        )
+        
+        try:
+            await context.bot.send_message(
+                chat_id=settings.OWNER_ID, 
+                text=report
+            )
+        except Exception as e:
+            print(f"Error sending plain text report: {e}")
+
+    async def _mute_user(self, chat_id: int, user, context: ContextTypes.DEFAULT_TYPE, reason: str):
+        
+        try:
+            
+            await context.bot.restrict_chat_member(
+                chat_id=chat_id,
+                user_id=user.id,
+                permissions=ChatPermissions(
+                    can_send_messages=False,
+                    can_send_photos=False,
+                    can_send_videos=False,
+                    can_add_web_page_previews=False
+                )
+            )
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🔇 {user.first_name} has been muted. Reason: {reason}."
+            )
+
+        except Exception as e:
+            
+            await context.bot.send_message(
+                chat_id=settings.OWNER_ID,
+                text=f"❌ Failed to mute user {user.id} in {chat_id}. Check bot permissions!"
+            )
+

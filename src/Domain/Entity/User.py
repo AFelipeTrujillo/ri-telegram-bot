@@ -37,6 +37,11 @@ class User:
     def unmute(self):
         self.is_muted = False
         self.warnings = 0
+    
+    def record_link_violation(self):
+        self.warnings += 1
+        if self.warnings >= 3:
+            self.is_muted = True
 
     
     @property
