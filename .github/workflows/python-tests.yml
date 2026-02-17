@@ -1,0 +1,29 @@
+name: Python Tests on Tag
+
+on:
+  push:
+    # Esto hará que el flujo se dispare cuando crees un tag que empiece por 'v'
+    tags:
+      - 'v*' 
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-mock
+        if [ -f pyproject.toml ]; then pip install .; fi
+
+    - name: Run tests with pytest
+      run: |
+        pytest
