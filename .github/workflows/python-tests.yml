@@ -25,5 +25,9 @@ jobs:
         if [ -f pyproject.toml ]; then pip install .; fi
 
     - name: Run tests with pytest
+      env:
+        TELEGRAM_TOKEN: "mock_token_for_testing"
+        MONGO_URI: "mongodb://localhost:27017"
+        OWNER_ID: "12345"
       run: |
         pytest
