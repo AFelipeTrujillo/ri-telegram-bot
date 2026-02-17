@@ -10,10 +10,9 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters
 from telegram.ext import CommandHandler
 
 #Use Cases
-from src.Application.UseCase.RegisterUserActivity import RegisterUserActivity
-from src.Application.UseCase.ProcessSpamCheck import ProcessSpamCheck
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
+from src.Application.UseCase.HandlePing import HandlePing
 
 from src.Infrastructure.Config.Settings import settings
 from src.Infrastructure.Persistence.MongoUserRepository import MongoUserRepository
@@ -31,10 +30,12 @@ def main():
     # spam_check_case = ProcessSpamCheck(user_repository = user_repo)
     handle_message_use_case = HandleUserMessage(user_repository = user_repo)
     handle_unmute_use_case = UnmuteUser(user_repository=user_repo)
+    handle_ping_use_case = HandlePing()
 
     controller = TelegramController(
         handle_message_use_case = handle_message_use_case,
-        handle_unmute_use_case = handle_unmute_use_case
+        handle_unmute_use_case = handle_unmute_use_case,
+        handle_ping_use_case = handle_ping_use_case
     )
 
     token = settings.TELEGRAM_TOKEN
