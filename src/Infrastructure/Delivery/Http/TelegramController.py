@@ -1,10 +1,14 @@
 from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 
+# Use Cases
 from src.Application.UseCase.RegisterUserActivity import RegisterUserActivity
 from src.Application.UseCase.ProcessSpamCheck import ProcessSpamCheck
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
+
+# Infra
+from src.Infrastructure.Config.Settings import settings
 
 class TelegramController:
 
@@ -15,6 +19,14 @@ class TelegramController:
         ):
         self.handle_message_case = handle_message_use_case
         self.handle_unmute_use_case = handle_unmute_use_case
+    
+    async def handle_ping(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+
+        if user_id != settings.OWNER_ID:
+            return
+        
+        await update.message.reply_text("🏓 Pong! Bot is alive and kicking.")
     
     async def handle_unmute(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id

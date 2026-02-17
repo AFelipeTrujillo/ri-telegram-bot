@@ -39,6 +39,8 @@ def main():
 
     token = settings.TELEGRAM_TOKEN
     app = ApplicationBuilder().token(token = token).build()
+
+    app.add_handler(CommandHandler("ping", controller.handle_ping))
     app.add_handler(CommandHandler("unmute", controller.handle_unmute))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), controller.handle_message))
 

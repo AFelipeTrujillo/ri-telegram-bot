@@ -10,6 +10,7 @@ class Settings:
         self.MONGO_URI = self._get_env("MONGO_URI", "mongodb://localhost:27017/")
         self.MONGO_DB_NAME = self._get_env("MONGO_DB_NAME", "ri_telegram_bot")
         self.SPAM_THRESHOLD_SECONDS = int(self._get_env("SPAM_THRESHOLD_SECONDS", "2"))
+        self.OWNER_ID = int(self._get_env("OWNER_ID", 0))
 
     
     def _get_env(self, key: str, default: str = None) -> str:
