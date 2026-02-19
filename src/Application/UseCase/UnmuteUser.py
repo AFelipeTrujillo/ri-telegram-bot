@@ -9,7 +9,7 @@ class UnmuteUser:
     def execute(self, user_id: int) -> bool:
         user = self.user_repository.find_by_id(user_id)
         if user:
-            user.unmute() # Resetea is_muted y warnings
+            user.unmute()
             self.user_repository.save(user)
             return True
         return False

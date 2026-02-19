@@ -2,6 +2,7 @@ from telegram import Update, ChatPermissions
 from telegram.ext import ContextTypes
 
 # Use Cases
+from src.Application.DTO.UserActivityDTO import UserActivityDTO
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
 from src.Application.UseCase.HandlePing import HandlePing
@@ -57,22 +58,27 @@ class TelegramController:
 
         self.handle_unmute_use_case.execute(target_user.id)
 
-        await update.message.reply_text(
-            f"✅ El usuario {target_user.mention_markdown_v2()} ha sido desbloqueado y ya puede escribir\\.",
-            parse_mode="MarkdownV2"
-        )
+        # TODO: Create the silence mode
+        # await update.message.reply_text(
+        #    f"✅ El usuario {target_user.mention_markdown_v2()} ha sido desbloqueado y ya puede escribir\\.",
+        #    parse_mode="MarkdownV2"
+        #)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        tg_user = update.effective_user
-        chat = update.effective_chat
-
-        if not tg_user or tg_user.is_bot or chat.type == "private":
-            return
-
-        if await self._handle_link_filtering(update, context):
+        if not update.message or not update.message.text:
             return
         
-        await self._handle_spam_detection(update, context)
+        dto = self._extract_dto(update)
+        is_admin = await self._check_if_admin(update)
+
+        link_decision = self.handle_filter_link_use_case.execute(dto, is_admin)
+        if link_decision != "allow":
+            return await self._apply_link_sanction(link_decision, update, context)
+    
+        spam_decision = self.handle_message_case.execute(dto)
+        if spam_decision != "allow":
+            return await self._apply_spam_sanction(spam_decision, update, context)
+
 
     async def _handle_spam_detection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         tg_user = update.effective_user
@@ -154,11 +160,6 @@ class TelegramController:
                 )
             )
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=f"🔇 {user.first_name} has been muted. Reason: {reason}."
-            )
-
         except Exception as e:
             
             await context.bot.send_message(
@@ -166,3 +167,60 @@ class TelegramController:
                 text=f"❌ Failed to mute user {user.id} in {chat_id}. Check bot permissions!"
             )
 
+    def _extract_dto(self, update: Update) -> UserActivityDTO:
+        user = update.effective_user
+        message = update.effective_message
+
+        has_links = any(e.type in ['url', 'text_link'] for e in message.entities) if message.entities else False
+
+        return UserActivityDTO(
+            user_id=user.id,
+            first_name=user.first_name,
+            username=user.username,
+            language_code=user.language_code,
+            is_premium=getattr(user, 'is_premium', False),
+            has_links=has_links,
+            content=message.text,
+            source="organic"
+        )
+    
+    async def _check_if_admin(self, update: Update) -> bool:
+        if update.effective_user.id == settings.OWNER_ID:
+            return True
+        
+        member = await update.effective_chat.get_member(update.effective_user.id)
+        return member.status in ['administrator', 'creator']
+
+    
+    async def _apply_link_sanction(self, decision: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        
+        await update.message.delete()
+
+        await self._mute_user(
+            update.effective_chat.id,
+            update.effective_user, 
+            context, 
+            reason="Link violation limit"
+        )
+
+        if decision == "mute_and_delete":
+            pass
+            # await update.message.reply_text(f"🚫 {update.effective_user.first_name} has been muted for repeated link spam.")
+        
+        await self._send_owner_report(update.effective_user, update.effective_chat, update.message.text, context)
+
+    
+    async def _apply_spam_sanction(self, decision: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if decision == "warning":
+            await update.message.delete()
+            await update.message.reply_text(f"⚠️ {update.effective_user.first_name}, slow down! Don't spam.")
+        elif decision == "mute":
+            # TODO: Create the silicen mode from .env
+            # await update.message.reply_text(f"🔇 {update.effective_user.first_name} has been muted for flooding the chat.")
+            await update.message.delete()
+            await self._mute_user(
+                update.effective_chat.id,
+                update.effective_user, 
+                context, 
+                reason="Spamming"
+            )

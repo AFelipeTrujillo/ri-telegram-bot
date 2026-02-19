@@ -1,31 +1,34 @@
 from datetime import datetime, timedelta
+
 from src.Domain.Entity.User import User
+from src.Application.Factory.UserFactory import UserFactory
+
+from src.Domain.ValueObject.TelegramProfile import TelegramProfile
 from src.Domain.Repository.UserRepository import UserRepository
+from src.Application.DTO.UserActivityDTO import UserActivityDTO
+
 from src.Infrastructure.Config.Settings import settings
 
 class HandleUserMessage:
     def __init__(self, user_repository: UserRepository):
         self.user_repository = user_repository
 
-    def execute(self, user_id: int, first_name: str, username: str = None) -> str:
-        user = self.user_repository.find_by_id(user_id)
+    def execute(self, dto: UserActivityDTO) -> str:
+        user = self.user_repository.find_by_id(dto.user_id)
         
         if not user:
-            past_date = datetime.now() - timedelta(minutes=1)
-            user = User(
-                id=user_id, 
-                first_name=first_name, 
-                username=username,
-                last_seen=past_date
+            user = UserFactory.create_from_dto( dto = dto )
+        else :
+            user.update_profile(
+                username = dto.username,
+                language_code = dto.language_code,
+                is_premium = dto.is_premium
             )
-            user.record_activity() # Primer mensaje
-            self.user_repository.save(user)
-            return "ok"
 
+        if user.is_muted:
+            return "mute"
+        
         is_spam = user.is_spamming(settings.SPAM_THRESHOLD_SECONDS)
-
-        user.first_name = first_name
-        user.username = username
         
         if is_spam:
             user.record_spam_activity()
@@ -37,4 +40,4 @@ class HandleUserMessage:
         user.reset_warnings()
         user.record_activity()
         self.user_repository.save(user)
-        return "ok"
+        return "allow"

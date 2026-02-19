@@ -2,25 +2,31 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
+from src.Domain.ValueObject.TelegramProfile import TelegramProfile
+
 
 @dataclass
 class User:
     id: int
-    first_name: str
+    first_name          : str
+    telegram_profile    : TelegramProfile
 
-    username: Optional[str] = None
-    message_count: int = 0
-    warnings: int = 0
-    is_muted: bool = False
-    last_seen: datetime = field(default_factory=datetime.now)
+    message_count   : int = 0
+    warnings        : int = 0
+    is_muted        : bool = False
+    last_seen       : datetime = field(default_factory=datetime.now)
+    joined_at       : datetime = field(default_factory=datetime.now)
 
     def is_spamming(self, threshold_seconds: int) -> bool:
+        
+        if self.message_count == 0:
+            return False
+        
         time_delta = (datetime.now() - self.last_seen).total_seconds()
         return time_delta < threshold_seconds
 
     def reset_warnings(self):
         self.warnings = 0
-
 
     def record_activity(self):
         self.message_count += 1
@@ -43,7 +49,15 @@ class User:
         if self.warnings >= 3:
             self.is_muted = True
 
-    
+    def update_profile(self, username: str, language_code: str, is_premium: bool):
+        
+        self.profile = TelegramProfile(
+            username = username,
+            language_code = language_code,
+            is_premium = is_premium,
+            source = self.telegram_profile.source
+        )
+
     @property
     def display_name(self) -> str:
         return f"@{self.username}" if self.username else self.first_name
