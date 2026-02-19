@@ -7,6 +7,7 @@ from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
 from src.Application.UseCase.HandlePing import HandlePing
 from src.Application.UseCase.FilterLink import FilterLink
+from src.Application.UseCase.FilterInlineButtons import FilterInlineButtons
 
 # Infra
 from src.Infrastructure.Config.Settings import settings
@@ -18,12 +19,15 @@ class TelegramController:
             handle_message_use_case: HandleUserMessage,
             handle_unmute_use_case: UnmuteUser,
             handle_ping_use_case: HandlePing,
-            handle_filter_link_use_case: FilterLink
+            handle_filter_link_use_case: FilterLink,
+            handle_filter_inline_buttons: FilterInlineButtons,
+
         ):
         self.handle_message_case = handle_message_use_case
         self.handle_unmute_use_case = handle_unmute_use_case
         self.handle_ping_use_case = handle_ping_use_case
         self.handle_filter_link_use_case = handle_filter_link_use_case
+        self.handle_filter_inline_buttons = handle_filter_inline_buttons
     
     async def handle_ping(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
@@ -74,7 +78,12 @@ class TelegramController:
         link_decision = self.handle_filter_link_use_case.execute(dto, is_admin)
         if link_decision != "allow":
             return await self._apply_link_sanction(link_decision, update, context)
-    
+
+        inline_decision = self.handle_filter_inline_buttons.execute(dto, is_admin)
+        if inline_decision != "allow":
+            return await self._apply_inline_buttons(inline_decision, update, context)
+
+
         spam_decision = self.handle_message_case.execute(dto)
         if spam_decision != "allow":
             return await self._apply_spam_sanction(spam_decision, update, context)
@@ -173,15 +182,20 @@ class TelegramController:
 
         has_links = any(e.type in ['url', 'text_link'] for e in message.entities) if message.entities else False
 
+        has_inline_buttons = False
+        if message.reply_markup and message.reply_markup.inline_keyboard:
+            has_inline_buttons = len(message.reply_markup.inline_keyboard) > 0
+
         return UserActivityDTO(
-            user_id=user.id,
-            first_name=user.first_name,
-            username=user.username,
-            language_code=user.language_code,
-            is_premium=getattr(user, 'is_premium', False),
-            has_links=has_links,
-            content=message.text,
-            source="organic"
+            user_id     = user.id,
+            first_name  = user.first_name,
+            username    = user.username,
+            language_code = user.language_code,
+            is_premium  = getattr(user, 'is_premium', False),
+            has_links   = has_links,
+            has_inline_buttons = has_inline_buttons,
+            content     = message.text,
+            source      = "organic"
         )
     
     async def _check_if_admin(self, update: Update) -> bool:
@@ -224,3 +238,11 @@ class TelegramController:
                 context, 
                 reason="Spamming"
             )
+
+    async def _apply_inline_buttons(self, decision: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+        if decision == "delete":
+            try:
+                await update.message.delete()
+            except Exception as e:
+                print(f"TelegramControler._apply_inline_buttons: {e}")

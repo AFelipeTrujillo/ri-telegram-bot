@@ -13,7 +13,8 @@ class TestTelegramControllerLinks:
             handle_message_use_case=AsyncMock(),
             handle_ping_use_case=AsyncMock(),
             handle_unmute_use_case=AsyncMock(),
-            handle_filter_link_use_case=MagicMock()
+            handle_filter_link_use_case=MagicMock(),
+            handle_filter_inline_buttons=MagicMock()
         )
 
     async def test_handle_link_filtering_should_delete_when_violation(self, controller):

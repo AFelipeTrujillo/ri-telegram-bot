@@ -10,4 +10,5 @@ class UserActivityDTO:
     is_premium: bool = False
     content: Optional[str] = None
     has_links: bool = False
+    has_inline_buttons: bool = False
     source: str = "organic"
