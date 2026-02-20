@@ -19,5 +19,5 @@ class UserFactory:
             id = dto.user_id, 
             first_name = dto.first_name,
             telegram_profile = telegram_profile,
-            
+            is_whitelisted = False
         )

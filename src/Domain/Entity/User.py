@@ -14,8 +14,12 @@ class User:
     message_count   : int = 0
     warnings        : int = 0
     is_muted        : bool = False
+    is_whitelisted  : bool = False
     last_seen       : datetime = field(default_factory=datetime.now)
     joined_at       : datetime = field(default_factory=datetime.now)
+
+    def toggle_whitelist(self, status: bool):
+        self.is_whitelisted = status
 
     def is_spamming(self, threshold_seconds: int) -> bool:
         

@@ -14,13 +14,13 @@ class FilterLink:
 
     def execute(self, dto: UserActivityDTO, is_admin: bool) -> str:
 
-        if dto.user_id == settings.OWNER_ID or is_admin:
+        user = self.user_repository.find_by_id(dto.user_id)
+
+        if dto.user_id == settings.OWNER_ID or is_admin or (user and user.is_whitelisted):
             return "allow"
         
         if not dto.has_links:
             return "allow"
-        
-        user = self.user_repository.find_by_id(dto.user_id)
         
         if not user:
             user = UserFactory.create_from_dto(dto = dto)

@@ -10,11 +10,12 @@ class TestTelegramControllerLinks:
         
         from src.Infrastructure.Delivery.Http.TelegramController import TelegramController
         return TelegramController(
-            handle_message_use_case=AsyncMock(),
-            handle_ping_use_case=AsyncMock(),
-            handle_unmute_use_case=AsyncMock(),
-            handle_filter_link_use_case=MagicMock(),
-            handle_filter_inline_buttons=MagicMock()
+            handle_message=AsyncMock(),
+            handle_ping=AsyncMock(),
+            handle_unmute=AsyncMock(),
+            handle_filter_link=MagicMock(),
+            handle_filter_inline_buttons=MagicMock(),
+            handle_whitelist_user=MagicMock(),
         )
 
     async def test_handle_link_filtering_should_delete_when_violation(self, controller):

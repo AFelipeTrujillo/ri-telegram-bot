@@ -1,4 +1,5 @@
 from telegram import Update, ChatPermissions
+from telegram.constants import ChatType
 from telegram.ext import ContextTypes
 
 # Use Cases
@@ -8,6 +9,7 @@ from src.Application.UseCase.UnmuteUser import UnmuteUser
 from src.Application.UseCase.HandlePing import HandlePing
 from src.Application.UseCase.FilterLink import FilterLink
 from src.Application.UseCase.FilterInlineButtons import FilterInlineButtons
+from src.Application.UseCase.WhitelistUser import WhitelistUser
 
 # Infra
 from src.Infrastructure.Config.Settings import settings
@@ -16,24 +18,26 @@ class TelegramController:
 
     def __init__(
             self, 
-            handle_message_use_case: HandleUserMessage,
-            handle_unmute_use_case: UnmuteUser,
-            handle_ping_use_case: HandlePing,
-            handle_filter_link_use_case: FilterLink,
+            handle_message: HandleUserMessage,
+            handle_unmute: UnmuteUser,
+            handle_ping: HandlePing,
+            handle_filter_link: FilterLink,
             handle_filter_inline_buttons: FilterInlineButtons,
+            handle_whitelist_user: WhitelistUser
 
         ):
-        self.handle_message_case = handle_message_use_case
-        self.handle_unmute_use_case = handle_unmute_use_case
-        self.handle_ping_use_case = handle_ping_use_case
-        self.handle_filter_link_use_case = handle_filter_link_use_case
+        self.handle_message_case = handle_message
+        self.handle_unmute_use_case = handle_unmute
+        self.handle_ping_use_case = handle_ping
+        self.handle_filter_link_use_case = handle_filter_link
         self.handle_filter_inline_buttons = handle_filter_inline_buttons
+        self.handle_whitelist_user = handle_whitelist_user
     
     async def handle_ping(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
 
         if self.handle_ping_use_case.execute(user_id):
-            await update.message.reply_text("🏓 Pong! Bot is alive and kicking.")
+            await update.message.reply_text("Pong! Bot is alive and kicking.")
     
     async def handle_unmute(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
@@ -89,19 +93,26 @@ class TelegramController:
             return await self._apply_spam_sanction(spam_decision, update, context)
 
 
-    async def _handle_spam_detection(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        tg_user = update.effective_user
-    
-        result = self.handle_message_case.execute(
-            user_id=tg_user.id,
-            username=tg_user.username,
-            first_name=tg_user.first_name
-        )
+    async def handle_whitelist_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        chat_type = update.effective_chat.type
 
-        if result == "warn":
-            await update.message.reply_text(f"⚠️ {tg_user.first_name}, don't spam!")
-        elif result == "mute":
-            await self._mute_user(update.effective_chat.id, tg_user, context, reason="Spamming")
+        if user_id != settings.OWNER_ID and chat_type != ChatType.PRIVATE:
+            await update.effective_message.delete()
+            return
+
+        if not context.args:
+            await update.message.reply_text("Please indicate the ID: /whitelist 12345678")
+
+        try:
+            target_id = int(context.args[0])
+            success = self.handle_whitelist_user.execute(target_user_id = target_id)
+            if success:
+                await update.message.reply_text(f"The user {target_id} has been added to the whitelist")
+            else:
+                await update.message.reply_text(f"The user {target_id} does not exist in the database")
+        except ValueError:
+            await update.message.reply_text("The ID has to be INT")
     
     async def _handle_link_filtering(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
 
@@ -205,25 +216,21 @@ class TelegramController:
         member = await update.effective_chat.get_member(update.effective_user.id)
         return member.status in ['administrator', 'creator']
 
-    
     async def _apply_link_sanction(self, decision: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        
-        await update.message.delete()
 
-        await self._mute_user(
-            update.effective_chat.id,
-            update.effective_user, 
-            context, 
-            reason="Link violation limit"
-        )
+        if decision == "delete" or decision == "mute_and_delete":
+            await update.message.delete()
 
         if decision == "mute_and_delete":
-            pass
-            # await update.message.reply_text(f"🚫 {update.effective_user.first_name} has been muted for repeated link spam.")
+            await self._mute_user(
+                update.effective_chat.id,
+                update.effective_user,
+                context,
+                reason="Link violation limit"
+            )
         
         await self._send_owner_report(update.effective_user, update.effective_chat, update.message.text, context)
 
-    
     async def _apply_spam_sanction(self, decision: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if decision == "warning":
             await update.message.delete()

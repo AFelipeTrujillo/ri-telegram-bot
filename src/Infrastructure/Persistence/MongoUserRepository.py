@@ -27,6 +27,7 @@ class MongoUserRepository(UserRepository):
             id                  = data["id"],
             first_name          = data["first_name"],
             telegram_profile    = telegram_profile,
+            is_whitelisted      = data.get("is_whitelisted", False),
             message_count       = data["message_count"],
             warnings            = data.get("warnings", 0),
             is_muted            = data.get("is_muted", False),
@@ -45,6 +46,7 @@ class MongoUserRepository(UserRepository):
                     "is_premium": user.telegram_profile.is_premium,
                     "source": user.telegram_profile.source
                 },
+                "is_whitelisted" : user.is_whitelisted,
                 "message_count" : user.message_count,
                 "warnings"      : user.warnings,
                 "is_muted"      : user.is_muted,
