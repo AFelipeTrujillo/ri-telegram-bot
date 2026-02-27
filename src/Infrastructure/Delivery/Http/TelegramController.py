@@ -4,6 +4,8 @@ from telegram.ext import ContextTypes
 
 # Use Cases
 from src.Application.DTO.UserActivityDTO import UserActivityDTO
+from src.Application.UseCase.FilterBotUnauthorized import FilterBotUnauthorized
+from src.Application.UseCase.HandleUserCommand import HandleUserCommand
 from src.Application.UseCase.HandleUserMessage import HandleUserMessage
 from src.Application.UseCase.UnmuteUser import UnmuteUser
 from src.Application.UseCase.HandlePing import HandlePing
@@ -23,7 +25,9 @@ class TelegramController:
             handle_ping: HandlePing,
             handle_filter_link: FilterLink,
             handle_filter_inline_buttons: FilterInlineButtons,
-            handle_whitelist_user: WhitelistUser
+            handle_whitelist_user: WhitelistUser,
+            handle_bot_unauthorized: FilterBotUnauthorized,
+            handle_user_command: HandleUserCommand
 
         ):
         self.handle_message_case = handle_message
@@ -31,13 +35,18 @@ class TelegramController:
         self.handle_ping_use_case = handle_ping
         self.handle_filter_link_use_case = handle_filter_link
         self.handle_filter_inline_buttons = handle_filter_inline_buttons
-        self.handle_whitelist_user = handle_whitelist_user
-    
+        self.handle_whitelist_user = handle_whitelist_user,
+        self.handle_bot_unauthorized = handle_bot_unauthorized
+        self.handle_user_command = handle_user_command
+
     async def handle_ping(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
 
         if self.handle_ping_use_case.execute(user_id):
             await update.message.reply_text("Pong! Bot is alive and kicking.")
+        else:
+            # TODO add notification to owner or admins
+            await update.effective_message.delete()
     
     async def handle_unmute(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
@@ -45,6 +54,7 @@ class TelegramController:
 
         member = await context.bot.get_chat_member(chat_id, user_id)
         if member.status not in ['administrator', 'creator']:
+            await update.effective_message.delete()
             return
         
         target_user = None
@@ -73,11 +83,24 @@ class TelegramController:
         #)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if not update.message or not update.message.text:
-            return
-        
         dto = self._extract_dto(update)
+        message = update.effective_message
         is_admin = await self._check_if_admin(update)
+        is_bot = await self._check_if_bot(update)
+        has_command = any(entity.type == "bot_command" for entity in (message.entities or []))
+        has_command_in_caption = any(entity.type == "bot_command" for entity in (message.caption_entities or []))
+
+        bot_decision = self.handle_bot_unauthorized.execute(dto = dto, is_bot = is_bot)
+        if bot_decision != "allow":
+            return await self._apply_bot_sanction(bot_decision, update, context)
+
+        user_command_decision = self.handle_user_command.execute(
+            dto=dto,
+            is_admin=is_admin,
+            has_command=(has_command or has_command_in_caption)
+        )
+        if user_command_decision != "allow":
+            return await self._apply_user_command_sanction(user_command_decision, update, context)
 
         link_decision = self.handle_filter_link_use_case.execute(dto, is_admin)
         if link_decision != "allow":
@@ -184,7 +207,7 @@ class TelegramController:
             
             await context.bot.send_message(
                 chat_id=settings.OWNER_ID,
-                text=f"❌ Failed to mute user {user.id} in {chat_id}. Check bot permissions!"
+                text=f"Failed to mute user {user.id} in {chat_id}. Check bot permissions!"
             )
 
     def _extract_dto(self, update: Update) -> UserActivityDTO:
@@ -253,3 +276,34 @@ class TelegramController:
                 await update.message.delete()
             except Exception as e:
                 print(f"TelegramControler._apply_inline_buttons: {e}")
+
+    async def _check_if_bot(self, update) -> bool:
+        return update.effective_user.is_bot
+
+    async def _apply_bot_sanction(self, decision, update, context):
+
+        if decision == "delete":
+            try:
+                await update.message.delete()
+            except Exception as e:
+                print(f"TelegramControler._apply_bot_sanction: {e}")
+
+    async def _apply_user_command_sanction(self, decision: str, update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+        if decision == "delete":
+            try:
+                await update.message.delete()
+            except Exception as e:
+                print(f"TelegramControler._apply_user_command_sanction.delete: {e}")
+
+        elif decision == "mute":
+            try:
+                await update.message.delete()
+                await self._mute_user(
+                    update.effective_chat.id,
+                    update.effective_user,
+                    context,
+                    reason="Command"
+                )
+            except Exception as e:
+                print(f"TelegramControler._apply_user_command_sanction.mute: {e}")

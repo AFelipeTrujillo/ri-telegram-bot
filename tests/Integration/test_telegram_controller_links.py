@@ -16,6 +16,8 @@ class TestTelegramControllerLinks:
             handle_filter_link=MagicMock(),
             handle_filter_inline_buttons=MagicMock(),
             handle_whitelist_user=MagicMock(),
+            handle_user_command=MagicMock(),
+            handle_bot_unauthorized=MagicMock()
         )
 
     async def test_handle_link_filtering_should_delete_when_violation(self, controller):

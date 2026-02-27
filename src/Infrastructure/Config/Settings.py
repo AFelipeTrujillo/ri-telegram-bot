@@ -7,6 +7,7 @@ class Settings:
         load_dotenv()
         
         self.TELEGRAM_TOKEN = self._get_env("TELEGRAM_TOKEN")
+        self.BOT_USERNAME = self._get_env("BOT_USERNAME")
         self.MONGO_URI = self._get_env("MONGO_URI", "mongodb://localhost:27017/")
         self.MONGO_DB_NAME = self._get_env("MONGO_DB_NAME", "ri_telegram_bot")
         self.SPAM_THRESHOLD_SECONDS = int(self._get_env("SPAM_THRESHOLD_SECONDS", "2"))
